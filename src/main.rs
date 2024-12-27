@@ -1,41 +1,78 @@
-use actix_web::{get, post, web, App, HttpServer, HttpResponse, Responder,};
-use std::path::PathBuf;
+use actix_web::middleware::Logger;
+use actix_web::{
+    error, get, post,
+    web::{self, Json, ServiceConfig},
+    Result,
+};
+use serde::{Deserialize, Serialize};
+use shuttle_actix_web::ShuttleActixWeb;
+use shuttle_runtime::{CustomError};
+use sqlx::{Executor, FromRow, PgPool};
 
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
-struct User {
-    username: String,
-    email: String,
+#[get("/{id}")]
+async fn retrieve(path: web::Path<i32>, state: web::Data<AppState>) -> Result<Json<Todo>> {
+// query database to get data
+// if error, return Bad Request HTTP status code
+    let todo = sqlx::query_as("SELECT * FROM todos WHERE id = $1")
+        .bind(*path)
+        .fetch_one(&state.pool)
+        .await
+        .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
+
+    Ok(Json(todo))
 }
 
-// ROUTES
+#[post("")]
+async fn add(todo: web::Json<TodoNew>, state: web::Data<AppState>) -> Result<Json<Todo>> {
+// query database to create a new record using the request body
+// if error, return Bad Request HTTP status code
+    let todo = sqlx::query_as("INSERT INTO todos(note) VALUES ($1) RETURNING id, note")
+        .bind(&todo.note)
+        .fetch_one(&state.pool)
+        .await
+        .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
 
-#[get("/")]
-async fn home() -> impl Responder {
-    "Welcome!"
+    Ok(Json(todo))
 }
 
-#[get("/user/{user_id}/{collection}")]
-async fn view_collection(info: web::Path<(u32, String)>) -> impl Responder {
-    let (user_id, collection_name) = info.into_inner();
-    HttpResponse::Ok().body(format!("User ID: {}; Collection: {}", user_id, collection_name))
+#[derive(Clone)]
+struct AppState {
+    pool: PgPool,
 }
 
-#[post("/create_user")]
-async fn create_user(user: web::Json<User>) -> impl Responder {
-    let new_user = user.into_inner();
-    // Process the new user data (e.g., save it to a database)
-    HttpResponse::Created().json(new_user)
+#[shuttle_runtime::main]
+async fn actix_web(
+    #[shuttle_shared_db::Postgres] pool: PgPool,
+) -> ShuttleActixWeb<impl FnOnce(&mut ServiceConfig) + Send + Clone + 'static> {
+// run migrations
+    pool.execute(include_str!("../schema.sql"))
+        .await
+        .map_err(CustomError::new)?;
+
+// set up AppState
+    let state = web::Data::new(AppState { pool });
+
+// set up our Actix web service and wrap it with logger and add the AppState as app data
+    let config = move |cfg: &mut ServiceConfig| {
+        cfg.service(
+            web::scope("/todos")
+                .wrap(Logger::default())
+                .service(retrieve)
+                .service(add)
+                .app_data(state),
+        );
+    };
+
+    Ok(config.into())
 }
 
-#[actix_web::main]
-async fn main() -> std::io::Result<()> {
-    HttpServer::new(|| {
-        App::new()
-            .service(home)
-            .service(view_collection)
-            .service(create_user)
-    })
-    .bind(("127.0.0.1", 8080))?
-    .run()
-    .await
+#[derive(Deserialize)]
+struct TodoNew {
+    pub note: String,
+}
+
+#[derive(Serialize, Deserialize, FromRow)]
+struct Todo {
+    pub id: i32,
+    pub note: String,
 }
