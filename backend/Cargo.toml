@@ -1,0 +1,22 @@
+[package]
+name = "backend"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+path = "src/main.rs"
+name = "backend"
+
+[dependencies]
+actix-web = "4.9.0"
+actix-web-httpauth = "0.8.2"
+config = { version="0.15.4", features=["yaml"] }
+dotenv = "0.15.0"
+jsonwebtoken = "9.3.0"
+serde = "1.0.217"
+tokio = { version="1.42.0", features=["macros", "rt-multi-thread"] }
+tracing = "0.1.41"
+tracing-subscriber = { version="0.3.19", features=["fmt", "std", "env-filter", "registry", "json", "tracing-log"] }
