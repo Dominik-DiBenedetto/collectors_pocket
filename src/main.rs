@@ -1,78 +1,16 @@
-use actix_web::middleware::Logger;
-use actix_web::{
-    error, get, post,
-    web::{self, Json, ServiceConfig},
-    Result,
-};
-use serde::{Deserialize, Serialize};
-use shuttle_actix_web::ShuttleActixWeb;
-use shuttle_runtime::{CustomError};
-use sqlx::{Executor, FromRow, PgPool};
+use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
+use std::io::Result;
 
-#[get("/{id}")]
-async fn retrieve(path: web::Path<i32>, state: web::Data<AppState>) -> Result<Json<Todo>> {
-// query database to get data
-// if error, return Bad Request HTTP status code
-    let todo = sqlx::query_as("SELECT * FROM todos WHERE id = $1")
-        .bind(*path)
-        .fetch_one(&state.pool)
-        .await
-        .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
-
-    Ok(Json(todo))
+async fn test_index() -> impl Responder {
+    HttpResponse::Ok().body("Hey there!")
 }
-
-#[post("")]
-async fn add(todo: web::Json<TodoNew>, state: web::Data<AppState>) -> Result<Json<Todo>> {
-// query database to create a new record using the request body
-// if error, return Bad Request HTTP status code
-    let todo = sqlx::query_as("INSERT INTO todos(note) VALUES ($1) RETURNING id, note")
-        .bind(&todo.note)
-        .fetch_one(&state.pool)
-        .await
-        .map_err(|e| error::ErrorBadRequest(e.to_string()))?;
-
-    Ok(Json(todo))
-}
-
-#[derive(Clone)]
-struct AppState {
-    pool: PgPool,
-}
-
-#[shuttle_runtime::main]
-async fn actix_web(
-    #[shuttle_shared_db::Postgres] pool: PgPool,
-) -> ShuttleActixWeb<impl FnOnce(&mut ServiceConfig) + Send + Clone + 'static> {
-// run migrations
-    pool.execute(include_str!("../schema.sql"))
-        .await
-        .map_err(CustomError::new)?;
-
-// set up AppState
-    let state = web::Data::new(AppState { pool });
-
-// set up our Actix web service and wrap it with logger and add the AppState as app data
-    let config = move |cfg: &mut ServiceConfig| {
-        cfg.service(
-            web::scope("/todos")
-                .wrap(Logger::default())
-                .service(retrieve)
-                .service(add)
-                .app_data(state),
-        );
-    };
-
-    Ok(config.into())
-}
-
-#[derive(Deserialize)]
-struct TodoNew {
-    pub note: String,
-}
-
-#[derive(Serialize, Deserialize, FromRow)]
-struct Todo {
-    pub id: i32,
-    pub note: String,
+#[actix_web::main]
+async fn main() -> Result<()> {
+    HttpServer::new(|| {
+        App::new()
+            .route("/", web::get().to(test_index))
+    })
+    .bind("127.0.0.01:8080")?
+    .run()
+    .await
 }
