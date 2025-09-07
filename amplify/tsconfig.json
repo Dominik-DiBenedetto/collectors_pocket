@@ -12,6 +12,10 @@
       "$amplify/*": [
         "../.amplify/generated/*"
       ]
-    }
-  }
+    },
+    "lib": ["dom", "dom.iterable", "esnext"],    // Added for JSX / DOM support
+    "jsx": "react-jsx",                           // Added for React 18+ JSX
+    "types": ["react", "react-dom"]              // Ensure React types are included
+  },
+  "include": ["../src"]                             // Include your source files
 }
