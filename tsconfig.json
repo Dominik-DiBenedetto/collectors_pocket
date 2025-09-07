@@ -20,11 +20,12 @@
     /* Amplify generated code alias */
     "baseUrl": ".",
     "paths": {
-      "$amplify/*": ["./.amplify/generated/*"]
+      "$amplify/*": ["./.amplify/generated/*"],
+      "@/*": ["./src/*"],
     }
   },
   "include": [
     "src/**/*",               // your React app
     ".amplify/generated/**/*" // Amplify’s generated code
-  ]
+, "tailwind.config.ts", "postcss.config.ts"  ]
 }
